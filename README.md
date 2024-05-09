@@ -20,11 +20,10 @@ As such, in light of these, this project aims to provide for a method of movemen
 ## Instructions for use:
 1. Download the desired file
 
-## Attribution 
-
 ## Authors
 
 - [@yaushing](https://www.github.com/yaushing)
+- [@sstroboapex](https://www.github.com/sstroboapex)
 
 ## Issues and Feedback
 

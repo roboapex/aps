@@ -21,7 +21,7 @@ bearing = 0
 ### CLASSES ###
 ###############
 class LinearRegression:
-        def __init__(self, fit_intercept=True):
+        def __init__(self):
             self.coef_ = []
 
         def fit(self, X, y):

@@ -113,17 +113,18 @@ To start calculating the direction the robot was facing, I started to code it wi
 The problem comes from the fact that when doing trigonometric calculations with the robot, the angle from an inverse function is always is the acute angle to the x-axis (the reference angle, α). When adjusting for sectors 2 to 4, this results in an angle (hereafter referred to as the "turning angle") that is read from the positive x direction, counting "anti-clockwise". Hence, when calculating the turning angle required to face the chosen point (from the current coordinates of the robot), the angle is red from that x direction. Although it is workable, the inherent difference between the turning angle and the robot's bearing makes calculations within the robot extremely inefficient, not to mention difficult for the coder (me). This basically means that now I have to rewrite the entire code. Or at least, make a really big patch update which makes it an effective "version 2". (Technically this is unofficially going to be version 3). 
 <hr>
 <h4>GIFs!!!</h4>
-Robot gradient: Assume the robot is at point (0, 0) and is facing the moving blue dot. Observe m₁, and observe that m₁ is positive in secotr 1 and 3 and negative in sector 2 and 4.
-
+<h5>Robot gradient</h5>
+<p>Assume the robot is at point (0, 0) and is facing the moving blue dot. Observe m₁, and observe that m₁ is positive in secotr 1 and 3 and negative in sector 2 and 4.</p> 
 <img src="images/gradient.gif" alt="Robot gradient problem gif" style="height:200px;"/>
-
-Robot bearing: Assume the robot is at point (0, 0) and is facing the moving blue dot. Observe b, and observe that b decreases from 360 degrees when facing the positive y direction and decreases as it moves from sector 1 to 4, "anti-clockwise". (I.e., increases when moving from sector 4 to 1, "clockwise")
-
+<hr>
+<h5>Robot bearing</h5>
+<p>Assume the robot is at point (0, 0) and is facing the moving blue dot. Observe b, and observe that b decreases from 360 degrees when facing the positive y direction and decreases as it moves from sector 1 to 4, "anti-clockwise". (I.e., increases when moving from sector 4 to 1, "clockwise")</p>
 <img src="images/bearing.gif" alt="Robot bearing problem gif" style="height:200px;"/>
-
-Wanted angle: Assume the robot is at point (0, 0) and the wanted coordinate is the moving blue dot. Observe w, the wanted angle measured from the axis in degrees. Observe that it increases as it travels from sector 1 to 4, "anti-clockwise", while the reference angle, α, alternates between the increasing and decreasing.
-
+<hr>
+<h5>Wanted angle</h5>
+<p>Assume the robot is at point (0, 0) and the wanted coordinate is the moving blue dot. Observe w, the wanted angle measured from the axis in degrees. Observe that it increases as it travels from sector 1 to 4, "anti-clockwise", while the reference angle, α, alternates between the increasing and decreasing.</p>
 <img src="images/angle.gif" alt="Wanted angle problem gif" style="height:200px;"/>
+<hr>
 <br>
 </details>
 TL;DR: I need a lot more time because I need to rewrite almost the entire code.

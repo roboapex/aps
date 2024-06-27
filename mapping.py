@@ -2,6 +2,7 @@
 ### IMPORTS ###
 ###############
 from hub import port, motion_sensor
+import motor
 import motor_pair
 import runloop
 import math, time
@@ -14,6 +15,8 @@ import math, time
 scale = 360
 coords = [0, 0]
 bearing = 0
+left_motor = port.A
+right_motor = port.B
 
 
 
@@ -168,7 +171,7 @@ def regress(target_co_ords):
     equation += str(coefficients[-1])
     print("R\u00B2 = " + str(r_sq) + ". Degree = " + str(degree))
     print("Equation: " + equation + ".")
-    return model # Warning - ignore
+    return model # Warning - ignores
 
 def f(x, coefficients):
     total = 0
@@ -194,40 +197,60 @@ def update_coords(coords, bearing):
     print("New Coords: " + str(coords) + " | Bearing: " + str(bearing))
     #| Angle: {math.degrees(math.atan(bearing))}
 
-def arc(current_coords, target_coords, current_bearing, look_ahead, W):
+async def arc(current_coords, target_coords, look_ahead, W):
     R = 0
-    t = 2
-    current_angle = round(math.degrees(math.atan(current_bearing)), 3)
+    t = 5
+    current_angle = check_bearing()
+    #current_angle = round(math.degrees(math.atan(current_bearing)), 3)
     mAB = (target_coords[1] - current_coords[1]) / (target_coords[0] - current_coords[0])
-    wanted_angle = round(math.degrees(math.atan(mAB)), 3)
-    angle_error = round(abs(current_angle - wanted_angle), 3)
-    R = (look_ahead / 2) / math.sin(math.radians(angle_error))
+    reference_angle = round(math.atan(mAB), 3)
+    change = [target_coords[0] - current_coords[0], target_coords[1] - current_coords[1]]
+    if change[0] > 0 and change[1] > 0:
+        wanted_angle = reference_angle
+    elif change[0] < 0 and change[1] > 0:
+        wanted_angle = math.pi - reference_angle
+    elif change[0] > 0 and change[1] < 0:
+        wanted_angle = math.pi + math.pi - reference_angle
+    elif change[0] < 0 and change[1] < 0:
+        wanted_angle = math.pi + reference_angle
+    angle_error = round(abs(math.radians(current_angle) - wanted_angle), 3) # Ignore this warning
+    R = (look_ahead / 2) / math.sin(angle_error)
     inner = R - (W / 2)
     outer = R + (W / 2)
-    innerArcLength = math.radians(2 * angle_error) * inner
-    outerArcLength = math.radians(2 * angle_error) * outer
-    outer = 1 if wanted_angle > current_angle else -1
-    innerSpeed = int(innerArcLength * scale / t)
-    outerSpeed = int(outerArcLength * scale / t)
-    print(current_bearing, mAB, outer)
-    print(current_angle, wanted_angle, angle_error, R)
-    print(innerArcLength, outerArcLength)
-    print(innerSpeed, outerSpeed)
-    if outer == 1:
-        motor_pair.move_tank_for_time(motor_pair.PAIR_1, 5000, 150, 406)
+    innerArcLength = 2 * angle_error * inner
+    outerArcLength = 2 * angle_error * outer
+    outer_wheel = -1 if wanted_angle > current_angle else 1 # Ignore this warning too
+    #print(current_bearing, mAB, outer_wheel)
+    #print(current_angle, wanted_angle, angle_error, R)
+    #print(inner, outer)
+    #print(innerArcLength, outerArcLength)
+    innerDeg = innerArcLength * scale
+    outerDeg = outerArcLength * scale
+    innerSpeed = innerDeg / t
+    outerSpeed = outerDeg / t
+    if outer_wheel == 1:
+        motor.run_for_degrees(left_motor, int(innerDeg), int(-1 * innerSpeed))
+        await motor.run_for_degrees(right_motor, int(outerDeg), int(outerSpeed))
+    else:
+        motor.run_for_degrees(left_motor, int(outerDeg), int(-1 * outerSpeed))
+        await motor.run_for_degrees(right_motor, int(innerDeg), int(innerSpeed))
+    return
 
 def check_bearing():
-    return math.tan(motion_sensor.tilt_angles()[0] / 10)
+    angle = motion_sensor.tilt_angles()[0] / 10
+    #return 360 if (360 - (abs(angle * -1) if angle < 0 else 360 - angle)) == 0 else (360 - (abs(angle * -1) if angle < 0 else 360 - angle))
+    return 360 - (360 - (abs(angle * -1) if angle < 0 else 360 - angle))
 
 
 
 ##########################
 ### FRONTEND FUNCTIONS ###
 ##########################
-async def curve(coords, bearing, target_co_ords, look_ahead, W = 10, pure_pursuit = True, path = False):
+async def curve(coords, bearing, target_co_ords, look_ahead, W = 1, pure_pursuit = True, turn_at_end = True):
     model = regress(target_co_ords)
     direction = 1 if target_co_ords[-1][0] > coords[0] else -1
     if pure_pursuit:
+        count = 0
         while ((coords[0] < target_co_ords[-1][0] and direction == 1) or (coords[0] > target_co_ords[-1][0] and direction == -1)):
             possible_targets = solve(look_ahead, 100, coords, model.coef_, 0.01)
             precision = 0.05
@@ -239,55 +262,115 @@ async def curve(coords, bearing, target_co_ords, look_ahead, W = 10, pure_pursui
                 possible_targets = solve(look_ahead, 100, coords, model.coef_, precision)
             chosen_target = possible_targets[-1]
             print(coords, chosen_target)
-            print(look_ahead, ((chosen_target[0] - coords[0])**2 + (chosen_target[1] - coords[1])**2)**0.5)
-            follow_arc = arc(coords, chosen_target, bearing, look_ahead, W)
+            dist = ((chosen_target[0] - coords[0])**2 + (chosen_target[1] - coords[1])**2)**0.5
+            print(look_ahead, dist)
+            count += 1
+            #break
+            await arc(coords, chosen_target, dist, W)
+            print("arc done")
             coords = chosen_target
             coords = [round(coords[0], 2), round(coords[1], 2)]
-            break
-        return coords, bearing
+            
+            #if count == 3:
+                #print("Interrupt")
+                #return
+        return coords
     else:
         while ((coords[0] < target_co_ords[-1][0] and direction == 1) or (coords[0] > target_co_ords[-1][0] and direction == -1)):
             x = round(coords[0] + (direction * look_ahead), 2)
             y = round(f(x, model.coef_), 2)
-            coords = [x, y]
-        return coords, bearing
+            coords = await go_to(motor_pair.PAIR_1, coords, [x, y], False)
+        coords = await go_to(motor_pair.PAIR_1, coords, [target_co_ords[-1][0], target_co_ords[-1][1]], False)
+        if turn_at_end: await reset_bearing(motor_pair.PAIR_1)
+        return coords
 
-async def go_to(motorpair, target_co_ords, turn = True):
-    direction = -1
-    change = [target_co_ords[0] - coords[0], target_co_ords[1] - coords[1]]
+async def go_to(motorpair, current_coords, target_co_ords, turn = 90):
+    change = [target_co_ords[0] - current_coords[0], target_co_ords[1] - current_coords[1]]
     total_move = math.sqrt(change[0] ** 2 + change[1] ** 2)
-    degrees_turn = round(math.degrees(math.atan(change[1]/change[0])), 2)
-    if change[1] >= 0:
-        if degrees_turn < 0: degrees_turn * -1 + 90
-    else:
-        direction = 1
-        if degrees_turn < 0: degrees_turn * -1
-        else: 180 - degrees_turn
-    print(total_move * scale, degrees_turn, direction)
-    await turn_degrees(motorpair, degrees_turn, direction)
+    reference_angle = round(math.degrees(math.atan(abs(change[1]/change[0]))), 3)
+    current_angle = check_bearing()
+    if change[0] > 0 and change[1] > 0:
+        wanted_angle = reference_angle
+    elif change[0] < 0 and change[1] > 0:
+        wanted_angle = 180 - reference_angle
+    elif change[0] > 0 and change[1] < 0:
+        wanted_angle = 360 - reference_angle
+    elif change[0] < 0 and change[1] < 0:
+        wanted_angle = 180 + reference_angle
+    angle_error = wanted_angle - current_angle # Ignore this warning
+    angle_error *= -1
+    if abs(angle_error) > 180:
+        angle_error = 360 - abs(angle_error)
+        angle_error *= -1
+    print(change, reference_angle, wanted_angle, angle_error) # Ignore this warning too
+    #degrees_turn = int(abs(angle_error))
+    await turn_degrees(motorpair, angle_error)
     await motor_pair.move_for_degrees(motorpair, int(total_move * scale), 0)
-    if turn: await turn_degrees(motorpair, degrees_turn, -1 * direction)
+    if turn:
+        angle_error_2 = turn - wanted_angle # Ignore this warning too
+        await turn_degrees(motorpair, angle_error_2 * -1)
+    return target_co_ords
 
-async def turn_degrees(motorpair, degrees, direction):
-    offset = motion_sensor.tilt_angles()[0] / 10
-    degrees_to_turn = degrees * direction
-    while abs(motion_sensor.tilt_angles()[0] / 10 - offset) < abs(degrees_to_turn):
+async def turn_degrees(motorpair, degrees):
+    offset = check_bearing()
+    direction = -1 if degrees > 0 else 1
+    changed_angle = 0
+    while abs(changed_angle) < abs(degrees):
         motor_pair.move_tank(motorpair, 180 * direction, -180 * direction)
+        changed_angle = abs(check_bearing() - offset)
+        if abs(changed_angle) > 180:
+            changed_angle = 360 - abs(changed_angle)
     motor_pair.stop(motorpair)
         #print(math.atan(check_bearing()))
     #motor_pair.move_tank_for_degrees(motorpair, -1*degrees*4, degrees*4, 1000)
 
+async def reset_bearing(motorpair):
+    current = check_bearing()
+    direction = -1 if current > 180 else 1
+    degrees_to_turn = current * -1
+    while abs(check_bearing() - current) < abs(degrees_to_turn):
+        motor_pair.move_tank(motorpair, 180 * direction, -180 * direction)
+    motor_pair.stop(motorpair)
 
 
 ############
 ### MAIN ###
 ############
-async def main():
-    motor_pair.pair(motor_pair.PAIR_1, port.A, port.B)
+async def main(coords):
+    motor_pair.pair(motor_pair.PAIR_1, left_motor, right_motor)
     print(check_bearing())
-    #await go_to(motor_pair.PAIR_1, [2, 1.5])
-    #await curve([0, 0], 0, [[0, 0], [2, 2], [4, 0]], 0.5)
-    arc([0, 0], [1, 1], 0, 1.414, 0.875)
+    time.sleep(5)
+    #await turn_degrees(motor_pair.PAIR_1, 135)
+    print(check_bearing())
     time.sleep(5)
     print(check_bearing())
-runloop.run(main())
+    time.sleep(5)
+    #time.sleep(5)
+    #coords = await go_to(motor_pair.PAIR_1, coords, [1, 1], False)
+    #coords = await go_to(motor_pair.PAIR_1, coords, [-1, 1], False)
+    #coords = await go_to(motor_pair.PAIR_1, coords, [1, 1], False)
+    #coords = await go_to(motor_pair.PAIR_1, coords, [-1, -1], False)
+    #coords = await go_to(motor_pair.PAIR_1, coords, [-1, 1], False)
+    #coords = await go_to(motor_pair.PAIR_1, coords, [2, 2], False)
+    #coords = await go_to(motor_pair.PAIR_1, coords, [4, 0], False)
+    #await reset_bearing(motor_pair.PAIR_1)
+    #await arc([0, 0], [1, 1], 1.414, 1)
+    #coords = await curve(coords, 0, [coords, [2, 2], [4, 0]], 1, 1, True)
+    await arc([0, 0], [0.5, 0.88], 1.01, 1)
+    time.sleep(1)
+    '''
+    await arc([0.5, 0.88], [1.15, 1.64], 1.00, 1)
+    time.sleep(1)
+    await arc([1.15, 1.64], [2.14, 1.99], 1.05, 1)
+    time.sleep(1)
+    await arc([2.14, 1.99], [3.01, 1.49], 1.00, 1)
+    time.sleep(1)
+    await arc([3.01, 1.49], [3.62, 0.69], 1.00, 1)
+    time.sleep(1)
+    await arc([3.62, 0.69], [4.09, -0.18], 0.99, 1)
+    '''
+    #await go_to(motor_pair.PAIR_1, [2, 1.5])
+    #arc([0, 0], [1, 1], 0, 1.414, 0.875)
+    time.sleep(5)
+    print(check_bearing())
+runloop.run(main(coords))

@@ -210,7 +210,7 @@ def arc(current_coords, target_coords, current_bearing, look_ahead, W):
     mAB = (target_coords[1] - current_coords[1]) / (target_coords[0] - current_coords[0])
     wanted_angle = round(math.degrees(math.atan(mAB)), 3)
     angle_error = round(abs(current_angle - wanted_angle), 3)
-    R = (look_ahead / 2) / math.sin(angle_error)
+    R = (look_ahead / 2) / math.sin(math.radians(angle_error))
     inner = R - (W / 2)
     outer = R + (W / 2)
     innerArcLength = math.radians(2 * angle_error) * inner
@@ -277,7 +277,7 @@ def go_to(target_co_ords, coords, turn = True, path = False):
 update_coords(coords, bearing)
 update_fake_coords(coords)
 coords, bearing = go_to([1, 1], coords)
-#print(arc([0, 0], [2, 2], 0,  0.5, 2))
+print(arc([0, 0], [3, 4], 0,  5, 2))
 #coords, bearing = go_to([1, 1], coords)
 #coords, bearing = go_to([2, 3], coords)
 #curve([1, 1], 1, [[1, 1], [3, 4], [5, 1]], 0.1, False, False, True)

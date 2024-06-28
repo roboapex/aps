@@ -239,7 +239,8 @@ async def arc(current_coords, target_coords, look_ahead, W):
 def check_bearing():
     angle = motion_sensor.tilt_angles()[0] / 10
     #return 360 if (360 - (abs(angle * -1) if angle < 0 else 360 - angle)) == 0 else (360 - (abs(angle * -1) if angle < 0 else 360 - angle))
-    return 360 - (360 - (abs(angle * -1) if angle < 0 else 360 - angle))
+    #return 450 - (360 - (360 - (abs(angle * -1) if angle < 0 else 360 - angle)))
+    return angle if angle >= 0 else 360 - abs(angle)
 
 
 
@@ -270,7 +271,7 @@ async def curve(coords, bearing, target_co_ords, look_ahead, W = 1, pure_pursuit
             print("arc done")
             coords = chosen_target
             coords = [round(coords[0], 2), round(coords[1], 2)]
-            
+
             #if count == 3:
                 #print("Interrupt")
                 #return
@@ -298,28 +299,30 @@ async def go_to(motorpair, current_coords, target_co_ords, turn = 90):
     elif change[0] < 0 and change[1] < 0:
         wanted_angle = 180 + reference_angle
     angle_error = wanted_angle - current_angle # Ignore this warning
-    angle_error *= -1
     if abs(angle_error) > 180:
         angle_error = 360 - abs(angle_error)
-        angle_error *= -1
     print(change, reference_angle, wanted_angle, angle_error) # Ignore this warning too
-    #degrees_turn = int(abs(angle_error))
     await turn_degrees(motorpair, angle_error)
-    await motor_pair.move_for_degrees(motorpair, int(total_move * scale), 0)
-    if turn:
-        angle_error_2 = turn - wanted_angle # Ignore this warning too
-        await turn_degrees(motorpair, angle_error_2 * -1)
+    #await motor_pair.move_for_degrees(motorpair, int(total_move * scale), 0)
+    #if turn:
+        #angle_error_2 = turn - wanted_angle # Ignore this warning too
+        #await turn_degrees(motorpair, angle_error_2 * -1)
     return target_co_ords
 
 async def turn_degrees(motorpair, degrees):
     offset = check_bearing()
-    direction = -1 if degrees > 0 else 1
-    changed_angle = 0
-    while abs(changed_angle) < abs(degrees):
-        motor_pair.move_tank(motorpair, 180 * direction, -180 * direction)
-        changed_angle = abs(check_bearing() - offset)
-        if abs(changed_angle) > 180:
-            changed_angle = 360 - abs(changed_angle)
+    direction = 1 if degrees > 0 else -1
+    integralGyroTurnError = 0
+    gyroTurnPrevError = degrees - (check_bearing() - offset)
+    while abs(check_bearing() - offset) < abs(degrees):
+        gyroTurnError = degrees - (check_bearing() - offset)
+        gyroTurnP = gyroTurnError * 0.5
+        gyroTurnD = (gyroTurnError - gyroTurnPrevError) * 15
+        gyroTurnI = integralGyroTurnError
+        GyroYawTurn = (gyroTurnP + gyroTurnI + gyroTurnD) * -1
+        motor_pair.move_tank(motorpair, int(-GyroYawTurn * direction), int(GyroYawTurn * direction))
+        gyroTurnPrevError = gyroTurnError
+        integralGyroTurnError += gyroTurnError
     motor_pair.stop(motorpair)
         #print(math.atan(check_bearing()))
     #motor_pair.move_tank_for_degrees(motorpair, -1*degrees*4, degrees*4, 1000)
@@ -337,14 +340,16 @@ async def reset_bearing(motorpair):
 ### MAIN ###
 ############
 async def main(coords):
+    print(check_bearing())
     motor_pair.pair(motor_pair.PAIR_1, left_motor, right_motor)
-    print(check_bearing())
-    time.sleep(5)
+    for _ in range(1000):
+        time.sleep(5)
+        await turn_degrees(motor_pair.PAIR_1, 90)
+        #await go_to(motor_pair.PAIR_1, [0, 0], [1, 1], False)
+        #print(check_bearing())
+        break
     #await turn_degrees(motor_pair.PAIR_1, 135)
-    print(check_bearing())
-    time.sleep(5)
-    print(check_bearing())
-    time.sleep(5)
+
     #time.sleep(5)
     #coords = await go_to(motor_pair.PAIR_1, coords, [1, 1], False)
     #coords = await go_to(motor_pair.PAIR_1, coords, [-1, 1], False)
@@ -355,10 +360,10 @@ async def main(coords):
     #coords = await go_to(motor_pair.PAIR_1, coords, [4, 0], False)
     #await reset_bearing(motor_pair.PAIR_1)
     #await arc([0, 0], [1, 1], 1.414, 1)
+    '''
     #coords = await curve(coords, 0, [coords, [2, 2], [4, 0]], 1, 1, True)
     await arc([0, 0], [0.5, 0.88], 1.01, 1)
     time.sleep(1)
-    '''
     await arc([0.5, 0.88], [1.15, 1.64], 1.00, 1)
     time.sleep(1)
     await arc([1.15, 1.64], [2.14, 1.99], 1.05, 1)

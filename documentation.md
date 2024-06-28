@@ -119,6 +119,24 @@
 </details>
 <details>
     <summary>Code</summary>
+    <h4>28 / 06 / 2025</h4>
+    <details>
+        <summary>-- Full Log--</summary>
+        <br>
+        <p>During CCA session</p>
+        <hr>
+        <div>
+            <h4>Modifications made</h4>
+            <p>
+                I managed to switch the bearing of the robot such that it counts the same way as the trigonometric calculation does. It was surprisingly easy to make the switch, especially after all the headaches it gave me. So that's done. Other modifications  are listed below. Unfortunately, not much progress was made in the way of pure pursuit.
+            </p>
+        </div>
+    </details>
+    <ul>
+        <li>Switched bearing of robot code to work with the Trig calculations</li>
+        <li>Switched Gyro turns to use PID gyro, in commit # ...</li>
+        <li>Removed PID gyro in commit # ..., because of calculation issues</li>
+    </ul>
     <h4>27 / 06 / 2024</h4>
     <details>
         <summary>-- Full Log --</summary>

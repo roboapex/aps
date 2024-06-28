@@ -213,13 +213,17 @@ async def arc(current_coords, target_coords, look_ahead, W):
         wanted_angle = math.pi + math.pi - reference_angle
     elif change[0] < 0 and change[1] < 0:
         wanted_angle = math.pi + reference_angle
-    angle_error = round(abs(math.radians(current_angle) - wanted_angle), 3) # Ignore this warning
+    angle_error = round(wanted_angle - math.radians(current_angle), 3) # Ignore this warning
+    if abs(angle_error) > math.pi:
+        angle_error = 2 * math.pi - abs(angle_error)
+    print(current_angle, math.degrees(wanted_angle), math.degrees(angle_error))
     R = (look_ahead / 2) / math.sin(angle_error)
+    print(R)
     inner = R - (W / 2)
     outer = R + (W / 2)
     innerArcLength = 2 * angle_error * inner
     outerArcLength = 2 * angle_error * outer
-    outer_wheel = -1 if wanted_angle > current_angle else 1 # Ignore this warning too
+    outer_wheel = -1 if angle_error < 0 else 1 # Ignore this warning too
     #print(current_bearing, mAB, outer_wheel)
     #print(current_angle, wanted_angle, angle_error, R)
     #print(inner, outer)
@@ -335,23 +339,8 @@ async def reset_bearing(motorpair):
 async def main(coords):
     print(check_bearing())
     motor_pair.pair(motor_pair.PAIR_1, left_motor, right_motor)
-    for _ in range(1000):
-        time.sleep(5)
-        await go_to(motor_pair.PAIR_1, [0, 0], [1, 1], False)
-        #print(check_bearing())
-        break
-    #await turn_degrees(motor_pair.PAIR_1, 135)
-
-    #time.sleep(5)
-    #coords = await go_to(motor_pair.PAIR_1, coords, [1, 1], False)
-    #coords = await go_to(motor_pair.PAIR_1, coords, [-1, 1], False)
-    #coords = await go_to(motor_pair.PAIR_1, coords, [1, 1], False)
-    #coords = await go_to(motor_pair.PAIR_1, coords, [-1, -1], False)
-    #coords = await go_to(motor_pair.PAIR_1, coords, [-1, 1], False)
-    #coords = await go_to(motor_pair.PAIR_1, coords, [2, 2], False)
-    #coords = await go_to(motor_pair.PAIR_1, coords, [4, 0], False)
-    #await reset_bearing(motor_pair.PAIR_1)
-    #await arc([0, 0], [1, 1], 1.414, 1)
+    time.sleep(5)
+    await arc([0, 0], [1, 1], 1.414, 1)
     '''
     #coords = await curve(coords, 0, [coords, [2, 2], [4, 0]], 1, 1, True)
     await arc([0, 0], [0.5, 0.88], 1.01, 1)

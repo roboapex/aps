@@ -136,6 +136,7 @@
         <li>Switched bearing of robot code to work with the Trig calculations</li>
         <li>Switched Gyro turns to use PID gyro, in commit #7914533.</li>
         <li>Removed PID gyro in commit #9a689ac, because of calculation issues</li>
+        <li>Updated all parts of the pure pursuit to get new robot bearing to work.</li>
     </ul>
     <h4>27 / 06 / 2024</h4>
     <details>

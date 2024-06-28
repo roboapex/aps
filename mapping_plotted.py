@@ -277,14 +277,6 @@ def go_to(target_co_ords, coords, turn = True, path = False):
 update_coords(coords, bearing)
 update_fake_coords(coords)
 coords, bearing = go_to([1, 1], coords)
-print(arc([0, 0], [3, 4], 0,  5, 2))
-#coords, bearing = go_to([1, 1], coords)
-#coords, bearing = go_to([2, 3], coords)
-#curve([1, 1], 1, [[1, 1], [3, 4], [5, 1]], 0.1, False, False, True)
-#coords, bearing = curve(coords, bearing, [[1, 1], [3, 4], [5, 1]], 0.4)
-#curve([1, 1], 1, [[1, 1], [3, 4], [5, 1]], 0.1, False, False, True)
-#coords, bearing = curve(coords, [[0, 0], [2, 2], [4, 0]], None, False)
-
 ## Code goes here
 
 data = np.array(hist)

@@ -134,8 +134,8 @@
     </details>
     <ul>
         <li>Switched bearing of robot code to work with the Trig calculations</li>
-        <li>Switched Gyro turns to use PID gyro, in commit # ...</li>
-        <li>Removed PID gyro in commit # ..., because of calculation issues</li>
+        <li>Switched Gyro turns to use PID gyro, in commit #7914533.</li>
+        <li>Removed PID gyro in commit #, because of calculation issues</li>
     </ul>
     <h4>27 / 06 / 2024</h4>
     <details>

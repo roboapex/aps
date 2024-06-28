@@ -311,21 +311,14 @@ async def go_to(motorpair, current_coords, target_co_ords, turn = 90):
 
 async def turn_degrees(motorpair, degrees):
     offset = check_bearing()
-    direction = 1 if degrees > 0 else -1
-    integralGyroTurnError = 0
-    gyroTurnPrevError = degrees - (check_bearing() - offset)
-    while abs(check_bearing() - offset) < abs(degrees):
-        gyroTurnError = degrees - (check_bearing() - offset)
-        gyroTurnP = gyroTurnError * 0.5
-        gyroTurnD = (gyroTurnError - gyroTurnPrevError) * 15
-        gyroTurnI = integralGyroTurnError
-        GyroYawTurn = (gyroTurnP + gyroTurnI + gyroTurnD) * -1
-        motor_pair.move_tank(motorpair, int(-GyroYawTurn * direction), int(GyroYawTurn * direction))
-        gyroTurnPrevError = gyroTurnError
-        integralGyroTurnError += gyroTurnError
+    direction = -1 if degrees > 0 else 1
+    changed_angle = 0
+    while abs(changed_angle) < abs(degrees):
+        motor_pair.move_tank(motorpair, 180 * direction, -180 * direction)
+        changed_angle = abs(check_bearing() - offset)
+        if abs(changed_angle) > 180:
+            changed_angle = 360 - abs(changed_angle)
     motor_pair.stop(motorpair)
-        #print(math.atan(check_bearing()))
-    #motor_pair.move_tank_for_degrees(motorpair, -1*degrees*4, degrees*4, 1000)
 
 async def reset_bearing(motorpair):
     current = check_bearing()
@@ -344,8 +337,7 @@ async def main(coords):
     motor_pair.pair(motor_pair.PAIR_1, left_motor, right_motor)
     for _ in range(1000):
         time.sleep(5)
-        await turn_degrees(motor_pair.PAIR_1, 90)
-        #await go_to(motor_pair.PAIR_1, [0, 0], [1, 1], False)
+        await go_to(motor_pair.PAIR_1, [0, 0], [1, 1], False)
         #print(check_bearing())
         break
     #await turn_degrees(motor_pair.PAIR_1, 135)

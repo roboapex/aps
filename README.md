@@ -13,12 +13,9 @@ As such, in light of these, this project aims to provide for a method of movemen
 - [Instructions](#Instructions-for-use:)
 - [Documentation](documentation.md)
 - [Code for Spike Prime (Python3)](mapping.llsp3)
-- [Code for Spike Prime (Block)](mapping_block.llsp3)
-- Code for Vex - Akan Datang!
-- [Simulation Code for Mac](mapping.py)
 
 ## Instructions for use:
-1. Download the desired file
+1. Download the python file
 
 ## Authors
 

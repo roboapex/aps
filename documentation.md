@@ -119,7 +119,15 @@
 </details>
 <details>
     <summary>Code</summary>
-    <h4>28 / 06 / 2025</h4>
+    <h4>21 / 08 / 2024</h4>
+    <p>
+        Updated a lot. Important things to note: in order to get points, the image of the surface has to be <em>perfectly</em> flat, i.e. it can't be made with just a camera, it has to be drawn or scanned.
+    </p>
+    <h4>02 / 07 / 2024</h4>
+    <p>
+        Simulation runs on desmos show big problem --> when tangent is parallel to the x-axis, the angle / circle is <em>undefined</em>, leading to the robot basically <em>dying</em>.
+    </p>
+    <h4>28 / 06 / 2024</h4>
     <details>
         <summary>-- Full Log--</summary>
         <br>

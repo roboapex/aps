@@ -1,11 +1,12 @@
 ###############
 ### IMPORTS ###
 ###############
-from hub import port, motion_sensor
+from hub import port, motion_sensor, light_matrix
 import motor
 import motor_pair
 import runloop
 import math, time
+import uasyncio as asyncio
 
 
 
@@ -14,10 +15,12 @@ import math, time
 #################
 scale = 360
 coords = [0, 0]
+x_loc, y_loc = 0, 0
 bearing = 0
 left_motor = port.A
 right_motor = port.B
-
+ROBOT_WIDTH = 0.8842
+old_left_rel, old_right_rel = 0, 0
 
 
 ###############
@@ -197,61 +200,134 @@ def update_coords(coords, bearing):
     print("New Coords: " + str(coords) + " | Bearing: " + str(bearing))
     #| Angle: {math.degrees(math.atan(bearing))}
 
-async def arc(current_coords, target_coords, look_ahead, W):
+async def arc(target_coords):
+    global coords
+    W = ROBOT_WIDTH
+    local_x, local_y = 0, 0
     R = 0
-    t = 5
     current_angle = check_bearing()
-    #current_angle = round(math.degrees(math.atan(current_bearing)), 3)
-    mAB = (target_coords[1] - current_coords[1]) / (target_coords[0] - current_coords[0])
-    reference_angle = round(math.atan(mAB), 3)
-    change = [target_coords[0] - current_coords[0], target_coords[1] - current_coords[1]]
-    if change[0] > 0 and change[1] > 0:
-        wanted_angle = reference_angle
-    elif change[0] < 0 and change[1] > 0:
-        wanted_angle = math.pi - reference_angle
-    elif change[0] > 0 and change[1] < 0:
-        wanted_angle = math.pi + math.pi - reference_angle
-    elif change[0] < 0 and change[1] < 0:
-        wanted_angle = math.pi + reference_angle
-    angle_error = round(wanted_angle - math.radians(current_angle), 3) # Ignore this warning
-    if abs(angle_error) > math.pi:
-        angle_error = 2 * math.pi - abs(angle_error)
-    print(current_angle, math.degrees(wanted_angle), math.degrees(angle_error))
-    R = (look_ahead / 2) / math.sin(angle_error)
+    change = [target_coords[0] - coords[0], target_coords[1] - coords[1]]
+    if not 0 in change:
+        mAB = change[1] / change[0]
+        reference_angle = abs(math.atan(mAB))
+        change = [target_coords[0] - coords[0], target_coords[1] - coords[1]]
+        if change[0] > 0 and change[1] > 0:
+            wanted_angle = reference_angle
+        elif change[0] < 0 and change[1] > 0:
+            wanted_angle = math.pi - reference_angle
+        elif change[0] > 0 and change[1] < 0:
+            wanted_angle = math.pi + math.pi - reference_angle
+        elif change[0] < 0 and change[1] < 0:
+            wanted_angle = math.pi + reference_angle
+        angle_error = wanted_angle - math.radians(current_angle) # Ignore this warning
+        if abs(angle_error) > math.pi:
+            angle_error = 2 * math.pi - abs(angle_error)
+        print(current_angle, math.degrees(wanted_angle), math.degrees(angle_error)) # Ignore this warning too
+        R = ((change[0]**2 + change[1]**2)**0.5 / 2) / math.sin(abs(angle_error))
+        base_angles = math.pi - 2 * angle_error
+        turning_angle = math.pi - base_angles
+    else:
+        wanted_angle = math.pi
+        angle_error = math.pi
+        R = max(change[0]/2, change[1]/2)
+        turning_angle = math.pi
     print(R)
-    inner = R - (W / 2)
-    outer = R + (W / 2)
-    innerArcLength = 2 * angle_error * inner
-    outerArcLength = 2 * angle_error * outer
-    outer_wheel = -1 if angle_error < 0 else 1 # Ignore this warning too
-    #print(current_bearing, mAB, outer_wheel)
-    #print(current_angle, wanted_angle, angle_error, R)
-    #print(inner, outer)
-    #print(innerArcLength, outerArcLength)
+    tracking_movement = turning_angle * R
+    innerArcLength = tracking_movement - ((W / 2) * turning_angle)
+    outerArcLength = tracking_movement + ((W / 2) * turning_angle)
     innerDeg = innerArcLength * scale
     outerDeg = outerArcLength * scale
-    innerSpeed = innerDeg / t
-    outerSpeed = outerDeg / t
+    innerSpeed = innerDeg / 5
+    outerSpeed = outerDeg / 5
+    print(tracking_movement, innerArcLength, outerArcLength)
+    outer_wheel = -1 if angle_error < 0 else 1
     if outer_wheel == 1:
         motor.run_for_degrees(left_motor, int(innerDeg), int(-1 * innerSpeed))
         await motor.run_for_degrees(right_motor, int(outerDeg), int(outerSpeed))
     else:
         motor.run_for_degrees(left_motor, int(outerDeg), int(-1 * outerSpeed))
         await motor.run_for_degrees(right_motor, int(innerDeg), int(innerSpeed))
-    return
+    print(current_angle, check_bearing(), math.degrees(turning_angle), W)
+    if abs(check_bearing() - math.degrees(turning_angle) - current_angle) > 2: # Correcting mistakes from too high speed
+        turning_angle = math.radians(check_bearing() - math.degrees(turning_angle) - current_angle)
+        tracking_movement = turning_angle * R
+        innerArcLength = tracking_movement - ((W / 2) * turning_angle)
+        outerArcLength = tracking_movement + ((W / 2) * turning_angle)
+        innerDeg = innerArcLength * scale
+        outerDeg = outerArcLength * scale
+        innerSpeed = innerDeg / 1
+        outerSpeed = outerDeg / 1
+        if check_bearing() - math.degrees(turning_angle) - current_angle > 0:
+            print("Overshot")
+            if outer_wheel == 1:
+                motor.run_for_degrees(left_motor, int(innerDeg), int(innerSpeed))
+                await motor.run_for_degrees(right_motor, int(outerDeg), -1 * int(outerSpeed))
+            else:
+                motor.run_for_degrees(left_motor, int(outerDeg), int(outerSpeed))
+                await motor.run_for_degrees(right_motor, int(innerDeg), -1 * int(innerSpeed))
+        else:
+            print("Undershot")
+            if outer_wheel == 1:
+                motor.run_for_degrees(left_motor, int(innerDeg), -1 * int(innerSpeed))
+                await motor.run_for_degrees(right_motor, int(outerDeg), int(outerSpeed))
+            else:
+                motor.run_for_degrees(left_motor, int(outerDeg), -1 * int(outerSpeed))
+                await motor.run_for_degrees(right_motor, int(innerDeg), int(innerSpeed))
+    """
+    left_distance, right_distance = motor.relative_position(left_motor) * -1 - old_left_distance, motor.relative_position(right_motor) - old_right_distance
+    tracking_distance = ((abs(left_distance - right_distance) / 2) + min(left_distance, right_distance)) / scale
+    final_angle = check_bearing()
+    angle_turned = math.radians(abs(current_angle - final_angle))
+    if angle_turned > math.pi:
+        angle_turned = math.pi - angle_turned
+    radius = tracking_distance / angle_turned
+    chord_length = 2 * radius * math.sin(angle_turned / 2)
+    reference_angle = angle_turned / 2
+    local_x, local_y = (chord_length * math.cos(reference_angle)), (chord_length * math.sin(reference_angle))
+    global_x, global_y = (chord_length * math.cos(reference_angle + math.radians(current_angle))), (chord_length * math.sin(reference_angle + math.radians(current_angle)))
+    print("Local_change, ", local_x, local_y)
+    print("Global change, ", global_x, global_y)
+    print("Dead reckoning: ", target_coords[0], target_coords[1], "\nOdometry: ", coords[0] + global_x, coords[1] + global_y)
+    coords = coords[0] + global_x, coords[1] + global_y
+    """
 
 def check_bearing():
     angle = motion_sensor.tilt_angles()[0] / 10
-    #return 360 if (360 - (abs(angle * -1) if angle < 0 else 360 - angle)) == 0 else (360 - (abs(angle * -1) if angle < 0 else 360 - angle))
-    #return 450 - (360 - (360 - (abs(angle * -1) if angle < 0 else 360 - angle)))
-    return angle if angle >= 0 else 360 - abs(angle)
+    angle = angle if angle >= 0 else 360 - abs(angle)
+    return angle
+
+def check_location():
+    global coords, old_angle, old_left_rel, old_right_rel
+    print(coords)
+    left_distance, right_distance = motor.relative_position(left_motor) * -1 - old_left_rel, motor.relative_position(right_motor) - old_right_rel
+    try:
+        if left_distance * right_distance < 0: raise ValueError
+        tracking_distance = ((abs(left_distance - right_distance) / 2) + min(left_distance, right_distance)) / scale
+        final_angle = check_bearing()
+        angle_turned = math.radians(abs(old_angle - final_angle))
+        if angle_turned > math.pi:
+            angle_turned = math.pi - angle_turned
+        radius = abs(tracking_distance) / angle_turned
+        chord_length = 2 * radius * math.sin(angle_turned / 2)
+        reference_angle = angle_turned / 2
+        if angle_turned <= 0.5: reference_angle = 0
+        local_x, local_y = (chord_length * math.cos(reference_angle)), (chord_length * math.sin(reference_angle))
+        global_x, global_y = (chord_length * math.cos(reference_angle + math.radians(old_angle))), (chord_length * math.sin(reference_angle + math.radians(old_angle)))
+        #print(global_x, global_y, coords[0] + global_x, coords[1] + global_y, old_left_rel, old_right_rel)
+        coords = coords[0] + global_x, coords[1] + global_y
+    except:
+        pass
+    old_angle = check_bearing()
+    old_left_rel = motor.relative_position(left_motor) * -1
+    old_right_rel = motor.relative_position(right_motor)
 
 
 
 ##########################
 ### FRONTEND FUNCTIONS ###
 ##########################
-async def curve(coords, bearing, target_co_ords, look_ahead, W = 1, pure_pursuit = True, turn_at_end = True):
+async def curve(target_co_ords, look_ahead, W = 1, pure_pursuit = True, turn_at_end = True):
+    global coords
     model = regress(target_co_ords)
     direction = 1 if target_co_ords[-1][0] > coords[0] else -1
     if pure_pursuit:
@@ -266,97 +342,99 @@ async def curve(coords, bearing, target_co_ords, look_ahead, W = 1, pure_pursuit
                 precision *= 5
                 possible_targets = solve(look_ahead, 100, coords, model.coef_, precision)
             chosen_target = possible_targets[-1]
-            print(coords, chosen_target)
+            #print(coords, chosen_target)
             dist = ((chosen_target[0] - coords[0])**2 + (chosen_target[1] - coords[1])**2)**0.5
-            print(look_ahead, dist)
+            #print(look_ahead, dist)
             count += 1
             #break
-            await arc(coords, chosen_target, dist, W)
-            print("arc done")
+            await arc(chosen_target, dist, W)
             coords = chosen_target
             coords = [round(coords[0], 2), round(coords[1], 2)]
-
-            #if count == 3:
-                #print("Interrupt")
-                #return
-        return coords
     else:
         while ((coords[0] < target_co_ords[-1][0] and direction == 1) or (coords[0] > target_co_ords[-1][0] and direction == -1)):
             x = round(coords[0] + (direction * look_ahead), 2)
             y = round(f(x, model.coef_), 2)
-            coords = await go_to(motor_pair.PAIR_1, coords, [x, y], False)
-        coords = await go_to(motor_pair.PAIR_1, coords, [target_co_ords[-1][0], target_co_ords[-1][1]], False)
-        if turn_at_end: await reset_bearing(motor_pair.PAIR_1)
-        return coords
+            print(coords, x, y)
+            await go_to([x, y], False)
+        if turn_at_end:
+            angle_error = 0 - check_bearing()
+            if abs(angle_error) > 180:
+                angle_error = 360 - abs(angle_error)
+            await turn_degrees(angle_error)
 
-async def go_to(motorpair, current_coords, target_co_ords, turn = 90):
-    change = [target_co_ords[0] - current_coords[0], target_co_ords[1] - current_coords[1]]
-    total_move = math.sqrt(change[0] ** 2 + change[1] ** 2)
-    reference_angle = round(math.degrees(math.atan(abs(change[1]/change[0]))), 3)
-    current_angle = check_bearing()
-    if change[0] > 0 and change[1] > 0:
-        wanted_angle = reference_angle
-    elif change[0] < 0 and change[1] > 0:
-        wanted_angle = 180 - reference_angle
-    elif change[0] > 0 and change[1] < 0:
-        wanted_angle = 360 - reference_angle
-    elif change[0] < 0 and change[1] < 0:
-        wanted_angle = 180 + reference_angle
-    angle_error = wanted_angle - current_angle # Ignore this warning
+async def turn_to(angle_to_turn):
+    angle_error = angle_to_turn - check_bearing()
     if abs(angle_error) > 180:
         angle_error = 360 - abs(angle_error)
-    print(change, reference_angle, wanted_angle, angle_error) # Ignore this warning too
-    await turn_degrees(motorpair, angle_error)
-    #await motor_pair.move_for_degrees(motorpair, int(total_move * scale), 0)
-    #if turn:
-        #angle_error_2 = turn - wanted_angle # Ignore this warning too
-        #await turn_degrees(motorpair, angle_error_2 * -1)
-    return target_co_ords
+    await turn_degrees(angle_error)
+    time.sleep(0.1)
+    return
 
-async def turn_degrees(motorpair, degrees):
+async def go_to(target_co_ords, turn = 0):
+    if target_co_ords == coords: print("Robot is already at target.")
+    change = [target_co_ords[0] - coords[0], target_co_ords[1] - coords[1]]
+    current_angle = check_bearing()
+    total_move = math.sqrt(change[0] ** 2 + change[1] ** 2)
+    if change[0] == 0:
+        wanted_angle = 90 if change[1] > 0 else 270
+    elif change[1] == 0:
+        wanted_angle = 0 if change[0] > 0 else 180
+    else:
+        reference_angle = math.degrees(math.atan(abs(change[1]/change[0])))
+        if change[0] > 0 and change[1] > 0:
+            wanted_angle = reference_angle
+        elif change[0] < 0 and change[1] > 0:
+            wanted_angle = 180 - reference_angle
+        elif change[0] > 0 and change[1] < 0:
+            wanted_angle = 360 - reference_angle
+        elif change[0] < 0 and change[1] < 0:
+            wanted_angle = 180 + reference_angle
+    await turn_to(wanted_angle)
+    check_location()
+    await motor_pair.move_for_degrees(motor_pair.PAIR_1, int(total_move * scale), 0)
+    check_location()
+    await turn_to(turn)
+
+async def turn_degrees(degrees):
+    motorpair = motor_pair.PAIR_1
+    if abs(degrees) == 180: 
+        await turn_degrees(90)
+        await turn_degrees(90)
+        return
     offset = check_bearing()
-    direction = -1 if degrees > 0 else 1
+    direction = 1 if degrees > 0 else -1
+    direction *= -1
     changed_angle = 0
     while abs(changed_angle) < abs(degrees):
         motor_pair.move_tank(motorpair, 180 * direction, -180 * direction)
         changed_angle = abs(check_bearing() - offset)
-        if abs(changed_angle) > 180:
-            changed_angle = 360 - abs(changed_angle)
-    motor_pair.stop(motorpair)
-
-async def reset_bearing(motorpair):
-    current = check_bearing()
-    direction = -1 if current > 180 else 1
-    degrees_to_turn = current * -1
-    while abs(check_bearing() - current) < abs(degrees_to_turn):
-        motor_pair.move_tank(motorpair, 180 * direction, -180 * direction)
+        if changed_angle > 180:
+            changed_angle = 360 - changed_angle
     motor_pair.stop(motorpair)
 
 
 ############
 ### MAIN ###
 ############
-async def main(coords):
-    print(check_bearing())
+motor.reset_relative_position(left_motor, 0)
+motor.reset_relative_position(right_motor, 0)
+async def main():
+    global coords, old_angle
+    old_angle = check_bearing()
     motor_pair.pair(motor_pair.PAIR_1, left_motor, right_motor)
-    time.sleep(5)
-    await arc([0, 0], [1, 1], 1.414, 1)
-    '''
-    #coords = await curve(coords, 0, [coords, [2, 2], [4, 0]], 1, 1, True)
-    await arc([0, 0], [0.5, 0.88], 1.01, 1)
-    time.sleep(1)
-    await arc([0.5, 0.88], [1.15, 1.64], 1.00, 1)
-    time.sleep(1)
-    await arc([1.15, 1.64], [2.14, 1.99], 1.05, 1)
-    time.sleep(1)
-    await arc([2.14, 1.99], [3.01, 1.49], 1.00, 1)
-    time.sleep(1)
-    await arc([3.01, 1.49], [3.62, 0.69], 1.00, 1)
-    time.sleep(1)
-    await arc([3.62, 0.69], [4.09, -0.18], 0.99, 1)
-    '''
-    #await go_to(motor_pair.PAIR_1, [2, 1.5])
-    #arc([0, 0], [1, 1], 0, 1.414, 0.875)
-    time.sleep(5)
-    print(check_bearing())
-runloop.run(main(coords))
+    #await arc([1, 1])
+    #await turn_to(90)
+    await go_to([1, 1])
+
+async def checking():
+    while True:
+        check_location()
+        time.sleep(0.5)
+
+async def sync_start():
+    await asyncio.gather(
+        main(),
+        checking()
+    )
+
+asyncio.run(sync_start())

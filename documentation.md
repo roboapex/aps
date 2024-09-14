@@ -119,6 +119,14 @@
 </details>
 <details>
     <summary>Code</summary>
+    <h4>14 / 09 / 2024 </h4>
+    <ul>
+        <li>Added live tracking of robot</li>
+        <p>This was a huge bit</p>
+        <li>Changed how robot follows arcs</li>
+        <li>Calibrated robot width</li>
+        <li>Switched to use global variables</li>
+    </ul>
     <h4>21 / 08 / 2024</h4>
     <p>
         Updated a lot. Important things to note: in order to get points, the image of the surface has to be <em>perfectly</em> flat, i.e. it can't be made with just a camera, it has to be drawn or scanned.

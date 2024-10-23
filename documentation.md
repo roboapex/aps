@@ -123,7 +123,7 @@
     <ul>
         <li>Recalibrated robot tracking</li>
         <li>Fixed bug where bot can only track moving forward</li>
-        <li>Lemme die pls</li>
+        <li>Last stretch: making it pick points on a curve to go to!!!</li>
     </ul>
     <h4>14 / 09 / 2024 </h4>
     <ul>
